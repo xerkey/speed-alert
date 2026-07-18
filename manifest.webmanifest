@@ -1,0 +1,13 @@
+{
+  "name": "Speed Alert",
+  "short_name": "SpeedAlert",
+  "description": "スノーボードのキッカー進入速度をビープ音で知らせるスピードアラーム",
+  "start_url": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1020",
+  "theme_color": "#0b1020",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

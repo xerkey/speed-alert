@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0b1020">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Speed Alert</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #151b30;
+    --text: #e8ecf6;
+    --dim: #8b93ad;
+    --accent: #4da3ff;
+    --warn: #ffb84d;
+    --hot: #ff5d5d;
+    --ok: #4dd08a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    display: flex;
+    flex-direction: column;
+    padding: env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 16px);
+    user-select: none;
+    -webkit-user-select: none;
+    overflow: hidden;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 4px;
+  }
+  header h1 { font-size: 16px; font-weight: 600; letter-spacing: .06em; color: var(--dim); }
+  #gpsStatus { font-size: 12px; color: var(--dim); text-align: right; line-height: 1.4; }
+  #gpsStatus .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #555; margin-right: 5px; }
+  #gpsStatus.good .dot { background: var(--ok); }
+  #gpsStatus.poor .dot { background: var(--warn); }
+  #gpsStatus.bad .dot { background: var(--hot); }
+
+  main { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 18px; min-height: 0; }
+
+  #speedWrap { text-align: center; }
+  #speed {
+    font-size: clamp(88px, 32vw, 180px);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    transition: color .15s;
+  }
+  #speedUnit { font-size: 18px; color: var(--dim); letter-spacing: .1em; }
+
+  #bar {
+    height: 14px;
+    border-radius: 7px;
+    background: var(--panel);
+    overflow: hidden;
+    position: relative;
+  }
+  #barFill {
+    height: 100%;
+    width: 0%;
+    border-radius: 7px;
+    background: var(--accent);
+    transition: width .2s linear, background .2s;
+  }
+  #barMarks { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim); margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+  .settings { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .setting {
+    background: var(--panel);
+    border-radius: 14px;
+    padding: 12px;
+    text-align: center;
+  }
+  .setting label { display: block; font-size: 12px; color: var(--dim); margin-bottom: 6px; }
+  .stepper { display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .stepper button {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    border: none;
+    background: #232b47;
+    color: var(--text);
+    font-size: 22px;
+    font-weight: 700;
+  }
+  .stepper button:active { background: #2f3a61; }
+  .stepper .value { font-size: 26px; font-weight: 700; min-width: 74px; font-variant-numeric: tabular-nums; }
+  .stepper .value small { font-size: 12px; color: var(--dim); font-weight: 400; }
+
+  #startBtn {
+    border: none;
+    border-radius: 16px;
+    padding: 18px;
+    font-size: 20px;
+    font-weight: 700;
+    color: #06121f;
+    background: var(--accent);
+    width: 100%;
+  }
+  #startBtn.running { background: var(--hot); color: #fff; }
+  #startBtn:active { filter: brightness(1.15); }
+
+  #demoRow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--panel);
+    border-radius: 14px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--dim);
+  }
+  #demoRow input[type=range] { flex: 1; }
+  #demoToggle { width: 20px; height: 20px; }
+
+  footer { text-align: center; font-size: 11px; color: #555e79; padding-top: 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>SPEED ALERT</h1>
+  <div id="gpsStatus"><span class="dot"></span><span id="gpsText">GPS 停止中</span></div>
+</header>
+
+<main>
+  <div id="speedWrap">
+    <div id="speed">0.0</div>
+    <div id="speedUnit">km/h</div>
+  </div>
+
+  <div>
+    <div id="bar"><div id="barFill"></div></div>
+    <div id="barMarks">
+      <span>0</span>
+      <span id="markStart">アラーム開始 25</span>
+      <span id="markTarget">目標 40</span>
+    </div>
+  </div>
+
+  <div class="settings">
+    <div class="setting">
+      <label>目標スピード</label>
+      <div class="stepper">
+        <button data-adj="target" data-d="-1">−</button>
+        <div class="value"><span id="targetVal">40</span> <small>km/h</small></div>
+        <button data-adj="target" data-d="1">＋</button>
+      </div>
+    </div>
+    <div class="setting">
+      <label>アラーム開始（目標の何km/h手前から）</label>
+      <div class="stepper">
+        <button data-adj="range" data-d="-1">−</button>
+        <div class="value"><span id="rangeVal">15</span> <small>km/h</small></div>
+        <button data-adj="range" data-d="1">＋</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="demoRow">
+    <input type="checkbox" id="demoToggle">
+    <label for="demoToggle">デモ</label>
+    <input type="range" id="demoSlider" min="0" max="80" step="0.5" value="0" disabled>
+    <span id="demoVal">0</span>
+  </div>
+
+  <button id="startBtn">▶ スタート</button>
+</main>
+
+<footer>画面は消さないでください（GPS維持のため画面ロックを自動で防ぎます）</footer>
+
+<script>
+"use strict";
+
+/* ================= 設定 ================= */
+const store = {
+  get target() { return +(localStorage.getItem("target") ?? 40); },
+  set target(v) { localStorage.setItem("target", v); },
+  get range() { return +(localStorage.getItem("range") ?? 15); },
+  set range(v) { localStorage.setItem("range", v); },
+};
+
+/* ================= 速度推定 =================
+ * 方針:
+ *  - Geolocation の coords.speed（多くの端末で GPS ドップラー由来。位置差分より高精度）を第一候補にする
+ *  - speed が null の端末では位置差分（ハバーサイン距離 / Δt）でフォールバック
+ *  - EMA で平滑化しつつ加速度も推定し、フィックス時刻から現在時刻まで外挿して
+ *    GPS の約1秒の遅延を補償する（キッカー進入中の加速に追従させるため）
+ *  - accuracy が悪いフィックス（>30m）は位置差分には使わない
+ */
+class SpeedEstimator {
+  constructor() { this.reset(); }
+  reset() {
+    this.v = 0;          // 平滑化済み速度 m/s
+    this.a = 0;          // 平滑化済み加速度 m/s^2
+    this.lastFixTime = 0;
+    this.lastPos = null;
+    this.hasFix = false;
+  }
+  pushFix(pos) {
+    const t = pos.timestamp;
+    const c = pos.coords;
+    let raw = null;
+
+    if (c.speed != null && isFinite(c.speed) && c.speed >= 0) {
+      raw = c.speed;
+    } else if (this.lastPos && c.accuracy <= 30) {
+      const dt = (t - this.lastFixTime) / 1000;
+      if (dt > 0.2 && dt < 5) {
+        raw = haversine(this.lastPos.latitude, this.lastPos.longitude, c.latitude, c.longitude) / dt;
+      }
+    }
+    if (c.accuracy <= 30) this.lastPos = { latitude: c.latitude, longitude: c.longitude };
+
+    if (raw != null) {
+      const dt = this.lastFixTime ? (t - this.lastFixTime) / 1000 : 1;
+      if (this.hasFix && dt > 0 && dt < 5) {
+        const aRaw = (raw - this.v) / dt;
+        this.a = this.a * 0.5 + aRaw * 0.5;
+      }
+      this.v = this.hasFix ? this.v * 0.4 + raw * 0.6 : raw;
+      this.hasFix = true;
+      this.lastFixTime = t;
+    }
+    return raw != null;
+  }
+  /* 現在時刻での推定速度（外挿つき, m/s）。フィックスが3秒来なければ減衰させる */
+  now() {
+    if (!this.hasFix) return 0;
+    const age = (Date.now() - this.lastFixTime) / 1000;
+    if (age > 3) return Math.max(0, this.v * Math.max(0, 1 - (age - 3)));
+    const extra = Math.min(age, 1.5);
+    return Math.max(0, this.v + this.a * extra);
+  }
+}
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000, toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+  const s = Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+/* ================= サウンド =================
+ * アラーム開始速度〜目標速度の間で、ビープ間隔を 900ms → 110ms へ指数的に短縮。
+ * 目標以上では連続音（ピー）。ピッチも速度に応じて上げる。
+ * Web Audio のクロックで先読みスケジュールし、UI の負荷でリズムが乱れないようにする。
+ */
+class Beeper {
+  constructor() {
+    this.ctx = null;
+    this.nextBeep = 0;
+    this.continuousOsc = null;
+    this.timer = null;
+  }
+  async start() {
+    if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    await this.ctx.resume();
+    // 無音を一度鳴らして iOS のオーディオをアンロック
+    const buf = this.ctx.createBuffer(1, 1, 22050);
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf; src.connect(this.ctx.destination); src.start();
+    this.nextBeep = this.ctx.currentTime;
+    this.timer = setInterval(() => this.tick(), 40);
+  }
+  stop() {
+    clearInterval(this.timer);
+    this.timer = null;
+    this.stopContinuous();
+  }
+  /* ratio: 0=アラーム開始点, 1=目標到達, <0 は無音 */
+  setRatio(ratio) { this.ratio = ratio; }
+  tick() {
+    const r = this.ratio;
+    if (r == null || r < 0) { this.stopContinuous(); return; }
+    if (r >= 1) { this.startContinuous(); return; }
+    this.stopContinuous();
+    const interval = 0.9 * Math.pow(0.11 / 0.9, r);  // 900ms → 110ms(指数)
+    const t = this.ctx.currentTime;
+    while (this.nextBeep < t + 0.12) {
+      if (this.nextBeep >= t - 0.05) this.beepAt(Math.max(this.nextBeep, t), 880 + 440 * r);
+      this.nextBeep += interval;
+    }
+  }
+  beepAt(when, freq) {
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = "square";
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.exponentialRampToValueAtTime(0.5, when + 0.008);
+    g.gain.setValueAtTime(0.5, when + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + 0.07);
+    osc.connect(g).connect(this.ctx.destination);
+    osc.start(when);
+    osc.stop(when + 0.09);
+  }
+  startContinuous() {
+    if (this.continuousOsc) return;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = "square";
+    osc.frequency.value = 1400;
+    g.gain.setValueAtTime(0.0001, this.ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.5, this.ctx.currentTime + 0.02);
+    osc.connect(g).connect(this.ctx.destination);
+    osc.start();
+    this.continuousOsc = { osc, g };
+  }
+  stopContinuous() {
+    if (!this.continuousOsc) return;
+    const { osc, g } = this.continuousOsc;
+    const t = this.ctx.currentTime;
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
+    osc.stop(t + 0.05);
+    this.continuousOsc = null;
+    this.nextBeep = this.ctx.currentTime;
+  }
+}
+
+/* ================= アプリ ================= */
+const $ = id => document.getElementById(id);
+const est = new SpeedEstimator();
+const beeper = new Beeper();
+let running = false;
+let watchId = null;
+let wakeLock = null;
+let uiTimer = null;
+let lastAccuracy = null;
+
+function fmtSettings() {
+  $("targetVal").textContent = store.target;
+  $("rangeVal").textContent = store.range;
+  $("markStart").textContent = `アラーム開始 ${Math.max(0, store.target - store.range)}`;
+  $("markTarget").textContent = `目標 ${store.target}`;
+}
+
+document.querySelectorAll(".stepper button").forEach(b => {
+  let repeat = null;
+  const adjust = () => {
+    const d = +b.dataset.d;
+    if (b.dataset.adj === "target") store.target = Math.min(120, Math.max(5, store.target + d));
+    else store.range = Math.min(60, Math.max(3, store.range + d));
+    fmtSettings();
+  };
+  b.addEventListener("click", adjust);
+  b.addEventListener("touchstart", () => { repeat = setInterval(adjust, 180); }, { passive: true });
+  ["touchend", "touchcancel"].forEach(ev => b.addEventListener(ev, () => clearInterval(repeat)));
+});
+
+$("demoToggle").addEventListener("change", e => {
+  $("demoSlider").disabled = !e.target.checked;
+});
+$("demoSlider").addEventListener("input", e => {
+  $("demoVal").textContent = e.target.value;
+});
+
+$("startBtn").addEventListener("click", () => running ? stop() : start());
+
+async function start() {
+  running = true;
+  $("startBtn").textContent = "■ ストップ";
+  $("startBtn").classList.add("running");
+  est.reset();
+  await beeper.start();
+
+  if (!$("demoToggle").checked) {
+    watchId = navigator.geolocation.watchPosition(onFix, onGpsError, {
+      enableHighAccuracy: true,
+      maximumAge: 0,
+      timeout: 10000,
+    });
+    setGpsStatus("poor", "GPS 取得中…");
+  } else {
+    setGpsStatus("good", "デモモード");
+  }
+
+  try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {}
+  document.addEventListener("visibilitychange", reacquireWakeLock);
+
+  uiTimer = setInterval(update, 100);
+}
+
+function stop() {
+  running = false;
+  $("startBtn").textContent = "▶ スタート";
+  $("startBtn").classList.remove("running");
+  beeper.stop();
+  if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  clearInterval(uiTimer);
+  wakeLock?.release().catch(() => {});
+  wakeLock = null;
+  document.removeEventListener("visibilitychange", reacquireWakeLock);
+  setGpsStatus("", "GPS 停止中");
+  render(0);
+}
+
+async function reacquireWakeLock() {
+  if (running && document.visibilityState === "visible") {
+    try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {}
+  }
+}
+
+function onFix(pos) {
+  lastAccuracy = pos.coords.accuracy;
+  est.pushFix(pos);
+  const acc = pos.coords.accuracy;
+  if (acc <= 10) setGpsStatus("good", `GPS 良好 ±${acc.toFixed(0)}m`);
+  else if (acc <= 30) setGpsStatus("poor", `GPS 弱い ±${acc.toFixed(0)}m`);
+  else setGpsStatus("bad", `GPS 不良 ±${acc.toFixed(0)}m`);
+}
+function onGpsError(err) {
+  setGpsStatus("bad", err.code === 1 ? "位置情報が許可されていません" : "GPS エラー");
+}
+function setGpsStatus(cls, text) {
+  const el = $("gpsStatus");
+  el.className = cls;
+  $("gpsText").textContent = text;
+}
+
+function update() {
+  const demo = $("demoToggle").checked;
+  const kmh = demo ? +$("demoSlider").value : est.now() * 3.6;
+  render(kmh);
+
+  const target = store.target;
+  const startAt = Math.max(0, target - store.range);
+  const ratio = (kmh - startAt) / Math.max(1, target - startAt);
+  beeper.setRatio(running ? ratio : -1);
+}
+
+function render(kmh) {
+  $("speed").textContent = kmh.toFixed(1);
+  const target = store.target;
+  const startAt = Math.max(0, target - store.range);
+  const pct = Math.min(100, kmh / (target * 1.15) * 100);
+  $("barFill").style.width = pct + "%";
+  const speedEl = $("speed"), fill = $("barFill");
+  if (kmh >= target) { speedEl.style.color = "var(--hot)"; fill.style.background = "var(--hot)"; }
+  else if (kmh >= startAt) { speedEl.style.color = "var(--warn)"; fill.style.background = "var(--warn)"; }
+  else { speedEl.style.color = "var(--text)"; fill.style.background = "var(--accent)"; }
+}
+
+fmtSettings();
+render(0);
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+</script>
+</body>
+</html>
